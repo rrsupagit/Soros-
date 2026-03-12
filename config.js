@@ -1,17 +1,12 @@
 const SOROS_CONFIG = {
-
-SUPABASE_URL: "https://hxnzqfezvksxwipayqra.supabase.co",
-
-SUPABASE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4bnpxZmV6dmtzeHdpcGF5cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTEyNzYsImV4cCI6MjA4ODkyNzI3Nn0.-TLzoRFhROTEOrVEVJIBsGS2vajMEXxko_dsMgoni4E",
-
-SIGNAL_DURATION: 5,
-
-ATIVOS: [
-"EUR/USD",
-"GBP/USD",
-"USD/JPY",
-"BTC/USD",
-"ETH/USD"
-]
-
-}
+  SUPABASE_URL: "https://hxnzqfezvksxwipayqra.supabase.co",
+  SUPABASE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4bnpxZmV6dmtzeHdpcGF5cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTEyNzYsImV4cCI6MjA4ODkyNzI3Nn0.-TLzoRFhROTEOrVEVJIBsGS2vajMEXxko_dsMgoni4E",
+  SIGNAL_DURATION: 5,
+  ATIVOS: [
+    "EUR/USD",
+    "GBP/USD",
+    "USD/JPY",
+    "BTC/USD",
+    "ETH/USD"
+  ]
+};
