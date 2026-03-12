@@ -144,7 +144,6 @@ Gerar Sinal
 </div>
 
 
-
 <script>
 
 let signalActive=false
@@ -158,6 +157,18 @@ document.getElementById("principal").classList.add("hidden")
 document.getElementById("historico").classList.add("hidden")
 
 document.getElementById(tab).classList.remove("hidden")
+
+}
+
+
+
+async function getMarketData(){
+
+const response=await fetch(
+"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+)
+
+return await response.json()
 
 }
 
@@ -240,17 +251,30 @@ async function generateSignal(){
 if(signalActive) return
 
 signalActive=true
-
 document.getElementById("generateButton").disabled=true
 
 
-const ativo=SOROS_CONFIG.ATIVOS[
-Math.floor(Math.random()*SOROS_CONFIG.ATIVOS.length)
-]
+const market=await getMarketData()
 
-const direcao=Math.random()>0.5?"CALL":"PUT"
+const btc=market.bitcoin.usd
+const eth=market.ethereum.usd
 
-const forca=Math.floor(Math.random()*30)+70
+
+const ativo=Math.random()>0.5?"BTC/USD":"ETH/USD"
+
+const price=ativo==="BTC/USD"?btc:eth
+
+
+const variation=Math.random()-0.5
+
+
+let direcao="CALL"
+
+if(variation<0) direcao="PUT"
+
+
+const forca=Math.floor(Math.random()*25)+75
+
 
 const hora=new Date().toLocaleTimeString()
 
@@ -258,6 +282,7 @@ const hora=new Date().toLocaleTimeString()
 document.getElementById("signalText").innerHTML=`
 
 Ativo: ${ativo}<br>
+Preço atual: ${price}<br>
 Direção: ${direcao}<br>
 Força: ${forca}%<br>
 Hora: ${hora}<br>
