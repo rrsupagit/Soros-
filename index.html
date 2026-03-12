@@ -174,27 +174,43 @@ async function analyzeMarket(){
 
 let prices=[]
 
-for(let i=0;i<4;i++){
+for(let i=0;i<10;i++){
 
 const p=await getPrice()
 
 prices.push(p)
 
-await new Promise(r=>setTimeout(r,600))
+await new Promise(r=>setTimeout(r,400))
 
 }
 
-const first=prices[0]
-const last=prices[prices.length-1]
+let up=0
+let down=0
+
+for(let i=1;i<prices.length;i++){
+
+if(prices[i]>prices[i-1]) up++
+else if(prices[i]<prices[i-1]) down++
+
+}
 
 let direction="CALL"
+let trend="ALTA"
 
-if(last<first) direction="PUT"
+if(down>up){
 
-return {
-price:last,
+direction="PUT"
+trend="BAIXA"
+
+}
+
+const strength=Math.round((Math.max(up,down)/(prices.length-1))*100)
+
+return{
+price:prices[prices.length-1],
 direction:direction,
-trend:first<last?"ALTA":"BAIXA"
+trend:trend,
+strength:strength
 }
 
 }
@@ -286,7 +302,7 @@ const analysis=await analyzeMarket()
 
 const ativo="BTC/USD"
 const direcao=analysis.direction
-const forca=Math.floor(Math.random()*20)+80
+const forca=analysis.strength
 const hora=new Date().toLocaleTimeString()
 
 
@@ -295,8 +311,8 @@ document.getElementById("signalText").innerHTML=`
 Ativo: ${ativo}<br>
 Preço atual: ${analysis.price}<br>
 Tendência: ${analysis.trend}<br>
+Força da tendência: ${analysis.strength}%<br>
 Direção: ${direcao}<br>
-Força: ${forca}%<br>
 Hora: ${hora}<br>
 Status: ATIVO
 
@@ -348,4 +364,4 @@ loadHistory()
 </script>
 
 </body>
-</html>
+  </html>
