@@ -110,6 +110,7 @@ text-align:center;
 <div class="container">
 
 <div id="principal">
+
 <div class="card signal">
 <div id="signalText">Nenhum sinal ativo</div>
 <div id="timer" class="status"></div>
@@ -118,6 +119,7 @@ text-align:center;
 <button id="generateButton" onclick="generateSignal()">
 Gerar Sinal
 </button>
+
 </div>
 
 <div id="historico" class="hidden">
@@ -135,6 +137,7 @@ Gerar Sinal
 </div>
 
 <script>
+
 let signalActive=false
 let timerInterval=null
 let remaining=SOROS_CONFIG.SIGNAL_DURATION
@@ -145,76 +148,67 @@ document.getElementById("historico").classList.add("hidden")
 document.getElementById(tab).classList.remove("hidden")
 }
 
-async function getPriceData(){
+async function getPrice(){
+
 const r=await fetch(
-"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true"
+"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
 )
 
 const data=await r.json()
 
-return {
-price:data.bitcoin.usd,
-change24h:data.bitcoin.usd_24h_change || 0,
-updatedAt:data.bitcoin.last_updated_at || null
-}
+return data.bitcoin.usd
 }
 
 async function analyzeMarket(){
-let samples=[]
 
-for(let i=0;i<6;i++){
-const data=await getPriceData()
-samples.push(data)
-await new Promise(r=>setTimeout(r,800))
+let prices=[]
+
+for(let i=0;i<8;i++){
+
+const p=await getPrice()
+prices.push(p)
+
+await new Promise(r=>setTimeout(r,700))
+
 }
 
-let up=0
-let down=0
+let sum=0
 
-for(let i=1;i<samples.length;i++){
-if(samples[i].price > samples[i-1].price) up++
-else if(samples[i].price < samples[i-1].price) down++
-}
+prices.forEach(p=>sum+=p)
+
+let average=sum/prices.length
+
+let current=prices[prices.length-1]
 
 let direction="CALL"
 let trend="ALTA"
-let strength=0
-let source="micro"
 
-const moves=up+down
+if(current < average){
 
-if(moves>0){
-strength=Math.round((Math.max(up,down)/moves)*100)
-
-if(down>up){
 direction="PUT"
 trend="BAIXA"
-}
-}else{
-const lastSample=samples[samples.length-1]
-const change24h=lastSample.change24h
 
-direction=change24h >= 0 ? "CALL" : "PUT"
-trend=change24h >= 0 ? "ALTA" : "BAIXA"
-
-strength=Math.round(Math.min(Math.abs(change24h)*10,100))
-source="24h"
 }
 
-if(strength === 0){
-strength = 51
-}
+let diff=Math.abs(current-average)
+
+let strength=Math.round((diff/current)*10000)
+
+if(strength<50) strength=50
+if(strength>95) strength=95
 
 return{
-price:samples[samples.length-1].price,
+price:current,
 direction:direction,
 trend:trend,
 strength:strength,
-source:source
+average:average
 }
+
 }
 
 async function saveSignal(asset,direction,strength,time,status){
+
 await fetch(
 SOROS_CONFIG.SUPABASE_URL+"/rest/v1/signals",
 {
@@ -234,10 +228,13 @@ status:status
 })
 }
 )
+
 }
 
 async function loadHistory(){
+
 const list=document.getElementById("historyList")
+
 list.innerHTML="Carregando..."
 
 const response=await fetch(
@@ -260,6 +257,7 @@ return
 list.innerHTML=""
 
 data.forEach(item=>{
+
 const div=document.createElement("div")
 div.className="history-item"
 
@@ -272,14 +270,18 @@ Status: ${item.status}
 `
 
 list.appendChild(div)
+
 })
+
 }
 
 async function generateSignal(){
+
 if(signalActive) return
 
 signalActive=true
 document.getElementById("generateButton").disabled=true
+
 document.getElementById("signalText").innerHTML="Analisando mercado..."
 
 const analysis=await analyzeMarket()
@@ -290,36 +292,49 @@ const forca=analysis.strength
 const hora=new Date().toLocaleTimeString()
 
 document.getElementById("signalText").innerHTML=`
+
 Ativo: ${ativo}<br>
 Preço atual: ${analysis.price}<br>
+Média recente: ${analysis.average.toFixed(2)}<br>
 Tendência: ${analysis.trend}<br>
 Força da tendência: ${analysis.strength}%<br>
 Direção: ${direcao}<br>
-Fonte: ${analysis.source}<br>
 Hora: ${hora}<br>
 Status: ATIVO
+
 `
 
 remaining=SOROS_CONFIG.SIGNAL_DURATION
+
 document.getElementById("timer").innerText=`Expira em ${remaining}s`
 
 saveSignal(ativo,direcao,forca,hora,"ATIVO")
 
 timerInterval=setInterval(()=>{
+
 remaining--
+
 document.getElementById("timer").innerText=`Expira em ${remaining}s`
 
 if(remaining<=0){
+
 clearInterval(timerInterval)
+
 document.getElementById("timer").innerText="Sinal expirado"
+
 signalActive=false
 document.getElementById("generateButton").disabled=false
+
 loadHistory()
+
 }
+
 },1000)
+
 }
 
 loadHistory()
+
 </script>
 
 </body>
