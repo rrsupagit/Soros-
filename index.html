@@ -151,24 +151,26 @@ document.getElementById(tab).classList.remove("hidden")
 async function getPrice(){
 
 const r=await fetch(
-"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+"https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
 )
 
 const data=await r.json()
 
-return data.bitcoin.usd
+return parseFloat(data.price)
+
 }
 
 async function analyzeMarket(){
 
 let prices=[]
 
-for(let i=0;i<8;i++){
+for(let i=0;i<10;i++){
 
 const p=await getPrice()
+
 prices.push(p)
 
-await new Promise(r=>setTimeout(r,700))
+await new Promise(r=>setTimeout(r,400))
 
 }
 
