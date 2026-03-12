@@ -25,7 +25,7 @@ background:#0d1a2b;
 
 .container{
 padding:18px;
-padding-bottom:100px;
+padding-bottom:120px;
 }
 
 .card{
@@ -39,16 +39,10 @@ margin-bottom:18px;
 text-align:center;
 font-size:18px;
 line-height:1.6;
-min-height:170px;
+min-height:180px;
 display:flex;
 flex-direction:column;
 justify-content:center;
-}
-
-.status{
-margin-top:10px;
-font-size:15px;
-opacity:.9;
 }
 
 button{
@@ -61,10 +55,11 @@ color:white;
 font-size:17px;
 font-weight:bold;
 cursor:pointer;
+margin-top:10px;
 }
 
-button:disabled{
-background:#3a4d57;
+button.stop{
+background:#d33;
 }
 
 .nav{
@@ -95,11 +90,6 @@ border-radius:12px;
 margin-bottom:12px;
 line-height:1.5;
 }
-
-.empty{
-opacity:.7;
-text-align:center;
-}
 </style>
 </head>
 
@@ -110,20 +100,21 @@ text-align:center;
 <div class="container">
 
 <div id="principal">
+
 <div class="card signal">
-<div id="signalText">Nenhum sinal ativo</div>
-<div id="timer" class="status"></div>
+<div id="signalText">Aguardando...</div>
+<div id="timer"></div>
 </div>
 
-<button id="generateButton" onclick="generateSignal()">
-Gerar Sinal
-</button>
+<button onclick="startAuto()">Iniciar Auto</button>
+<button class="stop" onclick="stopAuto()">Parar Auto</button>
+
 </div>
 
 <div id="historico" class="hidden">
 <div class="card">
 <h3>Histórico</h3>
-<div id="historyList" class="empty">Carregando...</div>
+<div id="historyList">Carregando...</div>
 </div>
 </div>
 
@@ -135,9 +126,9 @@ Gerar Sinal
 </div>
 
 <script>
-let signalActive=false
-let timerInterval=null
-let remaining=SOROS_CONFIG.SIGNAL_DURATION
+
+let autoMode=false
+let operationActive=false
 
 function showTab(tab){
 document.getElementById("principal").classList.add("hidden")
@@ -150,57 +141,52 @@ return arr.reduce((a,b)=>a+b,0)/arr.length
 }
 
 async function getCandles(){
-const response=await fetch(
+const r=await fetch(
 "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=20",
-{
-cache:"no-store"
-}
+{cache:"no-store"}
 )
 
-const data=await response.json()
+const data=await r.json()
 
-return data.map(candle=>parseFloat(candle[4]))
+return data.map(c=>parseFloat(c[4]))
+}
+
+async function getPrice(){
+const r=await fetch(
+"https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
+{cache:"no-store"}
+)
+
+const d=await r.json()
+return parseFloat(d.price)
 }
 
 async function analyzeMarket(){
 
 const closes=await getCandles()
 
-const current=closes[closes.length-1]
+const short=average(closes.slice(-5))
+const long=average(closes.slice(-20))
 
-const shortCloses=closes.slice(-5)
-const longCloses=closes.slice(-20)
-
-const shortMA=average(shortCloses)
-const longMA=average(longCloses)
+const price=closes[closes.length-1]
 
 let direction="CALL"
-let trend="ALTA"
 
-if(shortMA<longMA && current<shortMA){
+if(price < short && short < long){
 direction="PUT"
-trend="BAIXA"
 }
-
-const maGap=Math.abs(shortMA-longMA)/current*100
-const priceGap=Math.abs(current-shortMA)/current*100
-
-let strength=Math.round((maGap*60 + priceGap*40)*100)
-
-if(strength<52) strength=52
-if(strength>95) strength=95
 
 return{
-price:current,
-shortMA:shortMA,
-longMA:longMA,
+price:price,
 direction:direction,
-trend:trend,
-strength:strength
+short:short,
+long:long
 }
+
 }
 
 async function saveSignal(asset,direction,strength,time,status){
+
 await fetch(
 SOROS_CONFIG.SUPABASE_URL+"/rest/v1/signals",
 {
@@ -220,14 +206,80 @@ status:status
 })
 }
 )
+
+}
+
+async function operate(){
+
+if(operationActive) return
+
+operationActive=true
+
+const analysis=await analyzeMarket()
+
+const entry=analysis.price
+const direction=analysis.direction
+
+document.getElementById("signalText").innerHTML=`
+BTC/USD<br>
+Direção: ${direction}<br>
+Entrada: ${entry}
+`
+
+let t=5
+
+const timer=setInterval(()=>{
+t--
+document.getElementById("timer").innerText=`Resultado em ${t}s`
+if(t<=0){
+clearInterval(timer)
+finishOperation(entry,direction)
+}
+},1000)
+
+}
+
+async function finishOperation(entry,direction){
+
+const exit=await getPrice()
+
+let result="LOSS"
+
+if(direction==="CALL" && exit>entry) result="WIN"
+if(direction==="PUT" && exit<entry) result="WIN"
+if(exit===entry) result="DRAW"
+
+document.getElementById("signalText").innerHTML=`
+BTC/USD<br>
+Entrada: ${entry}<br>
+Saída: ${exit}<br>
+Resultado: ${result}
+`
+
+await saveSignal("BTC/USD",direction,70,new Date().toLocaleTimeString(),result)
+
+operationActive=false
+
+if(autoMode){
+setTimeout(operate,2000)
+}
+
+}
+
+function startAuto(){
+autoMode=true
+operate()
+}
+
+function stopAuto(){
+autoMode=false
 }
 
 async function loadHistory(){
+
 const list=document.getElementById("historyList")
 
-list.innerHTML="Carregando..."
-
-const response=await fetch(
+const r=await fetch(
 SOROS_CONFIG.SUPABASE_URL+"/rest/v1/signals?select=*&order=created_at.desc&limit=20",
 {
 headers:{
@@ -237,78 +289,28 @@ headers:{
 }
 )
 
-const data=await response.json()
-
-if(!data || data.length===0){
-list.innerHTML='<div class="empty">Nenhum sinal salvo</div>'
-return
-}
+const data=await r.json()
 
 list.innerHTML=""
 
 data.forEach(item=>{
+
 const div=document.createElement("div")
+
 div.className="history-item"
 
 div.innerHTML=`
-<strong>${item.asset}</strong><br>
-Direção: ${item.direction}<br>
-Força: ${item.strength}%<br>
-Hora: ${item.time}<br>
-Status: ${item.status}
+${item.asset} | ${item.direction} | ${item.status}
 `
 
 list.appendChild(div)
+
 })
-}
 
-async function generateSignal(){
-
-if(signalActive) return
-
-signalActive=true
-document.getElementById("generateButton").disabled=true
-document.getElementById("signalText").innerHTML="Analisando mercado..."
-
-const analysis=await analyzeMarket()
-
-const ativo="BTC/USD"
-const direcao=analysis.direction
-const forca=analysis.strength
-const hora=new Date().toLocaleTimeString()
-
-document.getElementById("signalText").innerHTML=`
-Ativo: ${ativo}<br>
-Preço atual: ${analysis.price.toFixed(2)}<br>
-Média curta: ${analysis.shortMA.toFixed(2)}<br>
-Média longa: ${analysis.longMA.toFixed(2)}<br>
-Tendência: ${analysis.trend}<br>
-Força da tendência: ${analysis.strength}%<br>
-Direção: ${direcao}<br>
-Hora: ${hora}<br>
-Status: ATIVO
-`
-
-remaining=SOROS_CONFIG.SIGNAL_DURATION
-document.getElementById("timer").innerText=`Expira em ${remaining}s`
-
-saveSignal(ativo,direcao,forca,hora,"ATIVO")
-
-timerInterval=setInterval(()=>{
-remaining--
-document.getElementById("timer").innerText=`Expira em ${remaining}s`
-
-if(remaining<=0){
-clearInterval(timerInterval)
-document.getElementById("timer").innerText="Sinal expirado"
-signalActive=false
-document.getElementById("generateButton").disabled=false
-loadHistory()
-}
-},1000)
 }
 
 loadHistory()
+
 </script>
 
 </body>
