@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Soros</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial, Helvetica, sans-serif;
+background:#0b0f14;
+color:white;
+}
+
+header{
+text-align:center;
+padding:20px;
+font-size:28px;
+font-weight:bold;
+background:#111722;
+}
+
+.container{
+padding:20px;
+padding-bottom:80px;
+}
+
+.card{
+background:#151c28;
+border-radius:12px;
+padding:20px;
+margin-bottom:20px;
+}
+
+button{
+width:100%;
+padding:15px;
+border:none;
+border-radius:10px;
+background:#00bcd4;
+color:white;
+font-size:16px;
+font-weight:bold;
+cursor:pointer;
+}
+
+button:hover{
+background:#00a4ba;
+}
+
+.signal{
+text-align:center;
+font-size:18px;
+}
+
+.nav{
+position:fixed;
+bottom:0;
+width:100%;
+background:#111722;
+display:flex;
+}
+
+.nav button{
+flex:1;
+border-radius:0;
+background:none;
+padding:15px;
+font-size:14px;
+color:white;
+}
+
+.hidden{
+display:none;
+}
+
+.history-item{
+background:#1c2433;
+padding:12px;
+border-radius:8px;
+margin-bottom:10px;
+font-size:14px;
+}
+
+input{
+width:100%;
+padding:10px;
+margin-top:10px;
+border-radius:8px;
+border:none;
+background:#1c2433;
+color:white;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>Soros</header>
+
+<div class="container">
+
+<!-- PRINCIPAL -->
+
+<div id="principal">
+
+<div class="card signal">
+
+<div id="signalText">
+Nenhum sinal ativo
+</div>
+
+</div>
+
+<button onclick="generateSignal()">
+Gerar Sinal
+</button>
+
+</div>
+
+<!-- HISTÓRICO -->
+
+<div id="historico" class="hidden">
+
+<div class="card">
+
+<h3>Histórico</h3>
+
+<div id="historyList">
+Nenhum sinal ainda
+</div>
+
+</div>
+
+</div>
+
+<!-- CONFIG -->
+
+<div id="config" class="hidden">
+
+<div class="card">
+
+<h3>Configurações</h3>
+
+<label>Valor da entrada</label>
+<input id="valorEntrada" placeholder="Ex: 10">
+
+<label>Limite diário</label>
+<input id="limiteDiario" placeholder="Ex: 5 sinais">
+
+<button onclick="saveConfig()">Salvar</button>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- MENU -->
+
+<div class="nav">
+
+<button onclick="showTab('principal')">
+Principal
+</button>
+
+<button onclick="showTab('historico')">
+Histórico
+</button>
+
+<button onclick="showTab('config')">
+Config
+</button>
+
+</div>
+
+<script>
+
+let ativos = [
+"EUR/USD",
+"GBP/USD",
+"USD/JPY",
+"BTC/USD",
+"ETH/USD"
+]
+
+function showTab(tab){
+
+document.getElementById("principal").classList.add("hidden")
+document.getElementById("historico").classList.add("hidden")
+document.getElementById("config").classList.add("hidden")
+
+document.getElementById(tab).classList.remove("hidden")
+
+}
+
+function generateSignal(){
+
+let ativo = ativos[Math.floor(Math.random()*ativos.length)]
+
+let direcao = Math.random() > 0.5 ? "CALL" : "PUT"
+
+let forca = Math.floor(Math.random()*30)+70
+
+let hora = new Date().toLocaleTimeString()
+
+let sinal = `
+Ativo: ${ativo}<br>
+Direção: ${direcao}<br>
+Força: ${forca}%<br>
+Hora: ${hora}
+`
+
+document.getElementById("signalText").innerHTML = sinal
+
+saveHistory(ativo,direcao,forca,hora)
+
+}
+
+function saveHistory(ativo,direcao,forca,hora){
+
+let history = JSON.parse(localStorage.getItem("sorosHistory")) || []
+
+history.unshift({
+ativo,
+direcao,
+forca,
+hora
+})
+
+localStorage.setItem("sorosHistory",JSON.stringify(history))
+
+renderHistory()
+
+}
+
+function renderHistory(){
+
+let history = JSON.parse(localStorage.getItem("sorosHistory")) || []
+
+let list = document.getElementById("historyList")
+
+if(history.length === 0){
+
+list.innerHTML="Nenhum sinal ainda"
+
+return
+
+}
+
+list.innerHTML=""
+
+history.forEach(item=>{
+
+let div=document.createElement("div")
+
+div.className="history-item"
+
+div.innerHTML=`
+${item.ativo} |
+${item.direcao} |
+${item.forca}% |
+${item.hora}
+`
+
+list.appendChild(div)
+
+})
+
+}
+
+function saveConfig(){
+
+let valor=document.getElementById("valorEntrada").value
+let limite=document.getElementById("limiteDiario").value
+
+localStorage.setItem("valorEntrada",valor)
+localStorage.setItem("limiteDiario",limite)
+
+alert("Configuração salva")
+
+}
+
+function loadConfig(){
+
+let valor=localStorage.getItem("valorEntrada")
+let limite=localStorage.getItem("limiteDiario")
+
+if(valor){
+document.getElementById("valorEntrada").value=valor
+}
+
+if(limite){
+document.getElementById("limiteDiario").value=limite
+}
+
+}
+
+renderHistory()
+loadConfig()
+
+</script>
+
+</body>
+
+</html>
