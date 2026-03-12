@@ -66,7 +66,6 @@ cursor:pointer;
 
 button:disabled{
 background:#3a4d57;
-cursor:not-allowed;
 }
 
 .nav{
@@ -125,7 +124,6 @@ Gerar Sinal
 
 </div>
 
-
 <div id="historico" class="hidden">
 
 <div class="card">
@@ -137,12 +135,10 @@ Gerar Sinal
 
 </div>
 
-
 <div class="nav">
 <button onclick="showTab('principal')">Principal</button>
 <button onclick="showTab('historico');loadHistory();">Histórico</button>
 </div>
-
 
 <script>
 
@@ -161,14 +157,45 @@ document.getElementById(tab).classList.remove("hidden")
 }
 
 
+async function getPrice(){
 
-async function getMarketData(){
-
-const response=await fetch(
-"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+const r=await fetch(
+"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
 )
 
-return await response.json()
+const data=await r.json()
+
+return data.bitcoin.usd
+
+}
+
+
+async function analyzeMarket(){
+
+let prices=[]
+
+for(let i=0;i<4;i++){
+
+const p=await getPrice()
+
+prices.push(p)
+
+await new Promise(r=>setTimeout(r,600))
+
+}
+
+const first=prices[0]
+const last=prices[prices.length-1]
+
+let direction="CALL"
+
+if(last<first) direction="PUT"
+
+return {
+price:last,
+direction:direction,
+trend:first<last?"ALTA":"BAIXA"
+}
 
 }
 
@@ -253,36 +280,21 @@ if(signalActive) return
 signalActive=true
 document.getElementById("generateButton").disabled=true
 
+document.getElementById("signalText").innerHTML="Analisando mercado..."
 
-const market=await getMarketData()
+const analysis=await analyzeMarket()
 
-const btc=market.bitcoin.usd
-const eth=market.ethereum.usd
-
-
-const ativo=Math.random()>0.5?"BTC/USD":"ETH/USD"
-
-const price=ativo==="BTC/USD"?btc:eth
-
-
-const variation=Math.random()-0.5
-
-
-let direcao="CALL"
-
-if(variation<0) direcao="PUT"
-
-
-const forca=Math.floor(Math.random()*25)+75
-
-
+const ativo="BTC/USD"
+const direcao=analysis.direction
+const forca=Math.floor(Math.random()*20)+80
 const hora=new Date().toLocaleTimeString()
 
 
 document.getElementById("signalText").innerHTML=`
 
 Ativo: ${ativo}<br>
-Preço atual: ${price}<br>
+Preço atual: ${analysis.price}<br>
+Tendência: ${analysis.trend}<br>
 Direção: ${direcao}<br>
 Força: ${forca}%<br>
 Hora: ${hora}<br>
@@ -290,11 +302,9 @@ Status: ATIVO
 
 `
 
-
 remaining=SOROS_CONFIG.SIGNAL_DURATION
 
 document.getElementById("timer").innerText=`Expira em ${remaining}s`
-
 
 saveSignal(ativo,direcao,forca,hora,"ATIVO")
 
@@ -332,8 +342,6 @@ loadHistory()
 },1000)
 
 }
-
-
 
 loadHistory()
 
