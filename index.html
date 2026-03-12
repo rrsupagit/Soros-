@@ -174,13 +174,13 @@ async function analyzeMarket(){
 
 let prices=[]
 
-for(let i=0;i<10;i++){
+for(let i=0;i<12;i++){
 
 const p=await getPrice()
 
 prices.push(p)
 
-await new Promise(r=>setTimeout(r,400))
+await new Promise(r=>setTimeout(r,1500))
 
 }
 
@@ -364,4 +364,4 @@ loadHistory()
 </script>
 
 </body>
-  </html>
+</html>
