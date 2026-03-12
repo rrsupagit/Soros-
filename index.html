@@ -1,268 +1,319 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soros</title>
+  <script src="config.js"></script>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #08111c;
+      color: white;
+    }
 
-<title>Soros</title>
+    header {
+      text-align: center;
+      padding: 24px;
+      font-size: 30px;
+      font-weight: bold;
+      background: #0d1a2b;
+    }
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
+    .container {
+      padding: 18px;
+      padding-bottom: 100px;
+    }
 
-<style>
+    .card {
+      background: #121d2d;
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
 
-body{
-margin:0;
-font-family:Arial;
-background:#08111c;
-color:white;
-}
+    .signal {
+      text-align: center;
+      font-size: 18px;
+      line-height: 1.6;
+      min-height: 170px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
 
-header{
-text-align:center;
-padding:24px;
-font-size:30px;
-font-weight:bold;
-background:#0d1a2b;
-}
+    .status {
+      margin-top: 10px;
+      font-size: 15px;
+      opacity: 0.9;
+    }
 
-.container{
-padding:18px;
-padding-bottom:100px;
-}
+    .alert {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      text-align: center;
+      display: none;
+    }
 
-.card{
-background:#121d2d;
-border-radius:18px;
-padding:22px;
-margin-bottom:18px;
-}
+    .alert.error {
+      background: #5a1f1f;
+      color: #ffd7d7;
+      display: block;
+    }
 
-.signal{
-text-align:center;
-font-size:18px;
-line-height:1.6;
-min-height:170px;
-display:flex;
-flex-direction:column;
-justify-content:center;
-}
+    .alert.success {
+      background: #124930;
+      color: #d7ffe6;
+      display: block;
+    }
 
-button{
-width:100%;
-padding:18px;
-border:none;
-border-radius:14px;
-background:#10b9d3;
-color:white;
-font-size:17px;
-font-weight:bold;
-cursor:pointer;
-}
+    button {
+      width: 100%;
+      padding: 18px;
+      border: none;
+      border-radius: 14px;
+      background: #10b9d3;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+    }
 
-button:disabled{
-background:#3a4d57;
-}
+    button:disabled {
+      background: #3a4d57;
+      cursor: not-allowed;
+    }
 
-.nav{
-position:fixed;
-bottom:0;
-width:100%;
-background:#0d1a2b;
-display:flex;
-}
+    .nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background: #0d1a2b;
+      display: flex;
+    }
 
-.nav button{
-flex:1;
-border-radius:0;
-background:none;
-padding:18px;
-font-size:14px;
-color:white;
-}
+    .nav button {
+      flex: 1;
+      border-radius: 0;
+      background: none;
+      padding: 18px;
+      font-size: 14px;
+      color: white;
+    }
 
-.hidden{
-display:none;
-}
+    .hidden {
+      display: none;
+    }
 
-.history-item{
-background:#1a2739;
-padding:14px;
-border-radius:12px;
-margin-bottom:12px;
-}
+    .history-item {
+      background: #1a2739;
+      padding: 14px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
 
-</style>
-
+    .empty-text {
+      opacity: 0.75;
+      text-align: center;
+    }
+  </style>
 </head>
-
 <body>
 
-<header>Soros</header>
+  <header>Soros</header>
 
-<div class="container">
+  <div class="container">
 
-<div id="principal">
+    <div id="principal">
+      <div class="card signal">
+        <div id="signalText">Nenhum sinal ativo</div>
+        <div id="timer" class="status"></div>
+        <div id="appMessage" class="alert"></div>
+      </div>
 
-<div class="card signal">
+      <button id="generateButton" onclick="generateSignal()">
+        Gerar Sinal
+      </button>
+    </div>
 
-<div id="signalText">
-Nenhum sinal ativo
-</div>
+    <div id="historico" class="hidden">
+      <div class="card">
+        <h3>Histórico</h3>
+        <div id="historyList" class="empty-text">Carregando...</div>
+      </div>
+    </div>
 
-<div id="timer"></div>
+  </div>
 
-</div>
+  <div class="nav">
+    <button onclick="showTab('principal')">Principal</button>
+    <button onclick="showTab('historico'); loadHistory();">Histórico</button>
+  </div>
 
-<button id="generateButton" onclick="generateSignal()">
-Gerar Sinal
-</button>
+  <script>
+    let signalActive = false;
+    let timerInterval = null;
+    let remaining = SOROS_CONFIG.SIGNAL_DURATION;
 
-</div>
+    function showTab(tab) {
+      document.getElementById("principal").classList.add("hidden");
+      document.getElementById("historico").classList.add("hidden");
+      document.getElementById(tab).classList.remove("hidden");
+    }
 
-<div id="historico" class="hidden">
+    function showMessage(text, type) {
+      const box = document.getElementById("appMessage");
+      box.className = "alert " + type;
+      box.textContent = text;
+    }
 
-<div class="card">
+    function clearMessage() {
+      const box = document.getElementById("appMessage");
+      box.className = "alert";
+      box.textContent = "";
+    }
 
-<h3>Histórico</h3>
+    async function saveSignal(asset, direction, strength, time, status) {
+      const response = await fetch(
+        SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SOROS_CONFIG.SUPABASE_KEY,
+            "Authorization": "Bearer " + SOROS_CONFIG.SUPABASE_KEY,
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify({
+            asset: asset,
+            direction: direction,
+            strength: strength,
+            time: time,
+            status: status
+          })
+        }
+      );
 
-<div id="historyList">
-Carregando...
-</div>
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error("Falha ao salvar no banco: " + errorText);
+      }
 
-</div>
+      return await response.json();
+    }
 
-</div>
+    async function loadHistory() {
+      const list = document.getElementById("historyList");
+      list.innerHTML = "Carregando...";
 
-</div>
+      try {
+        const response = await fetch(
+          SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals?select=*&order=created_at.desc&limit=20",
+          {
+            method: "GET",
+            headers: {
+              "apikey": SOROS_CONFIG.SUPABASE_KEY,
+              "Authorization": "Bearer " + SOROS_CONFIG.SUPABASE_KEY
+            }
+          }
+        );
 
-<div class="nav">
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error("Falha ao carregar histórico: " + errorText);
+        }
 
-<button onclick="showTab('principal')">Principal</button>
-<button onclick="showTab('historico')">Histórico</button>
+        const data = await response.json();
 
-</div>
+        if (!data || data.length === 0) {
+          list.innerHTML = '<div class="empty-text">Nenhum sinal salvo ainda</div>';
+          return;
+        }
 
-<script>
+        list.innerHTML = "";
 
-const supabase = window.supabase.createClient(
-SOROS_CONFIG.SUPABASE_URL,
-SOROS_CONFIG.SUPABASE_KEY
-)
+        data.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "history-item";
+          div.innerHTML = `
+            <strong>${item.asset}</strong><br>
+            Direção: ${item.direction}<br>
+            Força: ${item.strength}%<br>
+            Hora: ${item.time}<br>
+            Status: ${item.status}
+          `;
+          list.appendChild(div);
+        });
+      } catch (error) {
+        list.innerHTML = '<div class="empty-text">Erro ao carregar histórico</div>';
+        showMessage(error.message, "error");
+      }
+    }
 
-let signalActive=false
-let timerInterval=null
-let remaining=SOROS_CONFIG.SIGNAL_DURATION
+    async function generateSignal() {
+      if (signalActive) {
+        return;
+      }
 
-function showTab(tab){
+      clearMessage();
 
-document.getElementById("principal").classList.add("hidden")
-document.getElementById("historico").classList.add("hidden")
+      signalActive = true;
+      document.getElementById("generateButton").disabled = true;
 
-document.getElementById(tab).classList.remove("hidden")
+      const ativo = SOROS_CONFIG.ATIVOS[
+        Math.floor(Math.random() * SOROS_CONFIG.ATIVOS.length)
+      ];
 
-}
+      const direcao = Math.random() > 0.5 ? "CALL" : "PUT";
+      const forca = Math.floor(Math.random() * 30) + 70;
+      const hora = new Date().toLocaleTimeString();
 
-async function generateSignal(){
+      document.getElementById("signalText").innerHTML = `
+        Ativo: ${ativo}<br>
+        Direção: ${direcao}<br>
+        Força: ${forca}%<br>
+        Hora: ${hora}<br>
+        Status: ATIVO
+      `;
 
-if(signalActive) return
+      remaining = SOROS_CONFIG.SIGNAL_DURATION;
+      document.getElementById("timer").innerText = `Expira em ${remaining}s`;
 
-signalActive=true
+      try {
+        await saveSignal(ativo, direcao, forca, hora, "ATIVO");
+        showMessage("Sinal salvo no Supabase", "success");
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
 
-const ativo=SOROS_CONFIG.ATIVOS[
-Math.floor(Math.random()*SOROS_CONFIG.ATIVOS.length)
-]
+      timerInterval = setInterval(() => {
+        remaining--;
+        document.getElementById("timer").innerText = `Expira em ${remaining}s`;
 
-const direcao=Math.random()>0.5?"CALL":"PUT"
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          document.getElementById("timer").innerText = "Sinal expirado";
+          document.getElementById("signalText").innerHTML = `
+            Ativo: ${ativo}<br>
+            Direção: ${direcao}<br>
+            Força: ${forca}%<br>
+            Hora: ${hora}<br>
+            Status: EXPIRADO
+          `;
+          signalActive = false;
+          document.getElementById("generateButton").disabled = false;
+          loadHistory();
+        }
+      }, 1000);
+    }
 
-const forca=Math.floor(Math.random()*30)+70
-
-const hora=new Date().toLocaleTimeString()
-
-remaining=SOROS_CONFIG.SIGNAL_DURATION
-
-document.getElementById("signalText").innerHTML=`
-Ativo: ${ativo}<br>
-Direção: ${direcao}<br>
-Força: ${forca}%<br>
-Hora: ${hora}<br>
-Status: ATIVO
-`
-
-saveSignal(ativo,direcao,forca,hora)
-
-timerInterval=setInterval(()=>{
-
-remaining--
-
-document.getElementById("timer").innerText=
-`Expira em ${remaining}s`
-
-if(remaining<=0){
-
-clearInterval(timerInterval)
-
-document.getElementById("timer").innerText="Sinal expirado"
-
-signalActive=false
-
-}
-
-},1000)
-
-}
-
-async function saveSignal(asset,direction,strength,time){
-
-await supabase
-.from("signals")
-.insert({
-asset,
-direction,
-strength,
-time,
-status:"EXPIRADO"
-})
-
-loadHistory()
-
-}
-
-async function loadHistory(){
-
-const {data}=await supabase
-.from("signals")
-.select("*")
-.order("created_at",{ascending:false})
-.limit(20)
-
-const list=document.getElementById("historyList")
-
-list.innerHTML=""
-
-data.forEach(item=>{
-
-const div=document.createElement("div")
-
-div.className="history-item"
-
-div.innerHTML=`
-${item.asset} |
-${item.direction} |
-${item.strength}% |
-${item.time}
-`
-
-list.appendChild(div)
-
-})
-
-}
-
-loadHistory()
-
-</script>
+    loadHistory();
+  </script>
 
 </body>
 </html>
