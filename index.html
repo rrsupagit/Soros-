@@ -146,7 +146,6 @@ let signalActive=false
 let timerInterval=null
 let remaining=SOROS_CONFIG.SIGNAL_DURATION
 
-
 function showTab(tab){
 
 document.getElementById("principal").classList.add("hidden")
@@ -155,7 +154,6 @@ document.getElementById("historico").classList.add("hidden")
 document.getElementById(tab).classList.remove("hidden")
 
 }
-
 
 async function getPrice(){
 
@@ -169,18 +167,19 @@ return data.bitcoin.usd
 
 }
 
-
 async function analyzeMarket(){
 
 let prices=[]
 
-for(let i=0;i<12;i++){
+for(let i=0;i<6;i++){
 
 const p=await getPrice()
 
+if(prices.length===0 || p!==prices[prices.length-1]){
 prices.push(p)
+}
 
-await new Promise(r=>setTimeout(r,1500))
+await new Promise(r=>setTimeout(r,800))
 
 }
 
@@ -204,7 +203,15 @@ trend="BAIXA"
 
 }
 
-const strength=Math.round((Math.max(up,down)/(prices.length-1))*100)
+let moves=up+down
+
+let strength=0
+
+if(moves>0){
+
+strength=Math.round((Math.max(up,down)/moves)*100)
+
+}
 
 return{
 price:prices[prices.length-1],
@@ -214,8 +221,6 @@ strength:strength
 }
 
 }
-
-
 
 async function saveSignal(asset,direction,strength,time,status){
 
@@ -240,8 +245,6 @@ status:status
 )
 
 }
-
-
 
 async function loadHistory(){
 
@@ -287,8 +290,6 @@ list.appendChild(div)
 
 }
 
-
-
 async function generateSignal(){
 
 if(signalActive) return
@@ -304,7 +305,6 @@ const ativo="BTC/USD"
 const direcao=analysis.direction
 const forca=analysis.strength
 const hora=new Date().toLocaleTimeString()
-
 
 document.getElementById("signalText").innerHTML=`
 
@@ -324,7 +324,6 @@ document.getElementById("timer").innerText=`Expira em ${remaining}s`
 
 saveSignal(ativo,direcao,forca,hora,"ATIVO")
 
-
 timerInterval=setInterval(()=>{
 
 remaining--
@@ -337,18 +336,7 @@ clearInterval(timerInterval)
 
 document.getElementById("timer").innerText="Sinal expirado"
 
-document.getElementById("signalText").innerHTML=`
-
-Ativo: ${ativo}<br>
-Direção: ${direcao}<br>
-Força: ${forca}%<br>
-Hora: ${hora}<br>
-Status: EXPIRADO
-
-`
-
 signalActive=false
-
 document.getElementById("generateButton").disabled=false
 
 loadHistory()
@@ -364,4 +352,4 @@ loadHistory()
 </script>
 
 </body>
-</html>
+  </html>
