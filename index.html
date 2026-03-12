@@ -1,419 +1,268 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soros</title>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #08111c;
-      color: white;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    header {
-      text-align: center;
-      padding: 24px 16px;
-      font-size: 30px;
-      font-weight: bold;
-      background: #0d1a2b;
-    }
+<title>Soros</title>
 
-    .container {
-      padding: 18px;
-      padding-bottom: 100px;
-    }
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 
-    .card {
-      background: #121d2d;
-      border-radius: 18px;
-      padding: 22px 18px;
-      margin-bottom: 18px;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset;
-    }
+<style>
 
-    .signal {
-      text-align: center;
-      font-size: 18px;
-      line-height: 1.5;
-      min-height: 190px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-    }
+body{
+margin:0;
+font-family:Arial;
+background:#08111c;
+color:white;
+}
 
-    .signal-title {
-      font-size: 14px;
-      opacity: 0.7;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
+header{
+text-align:center;
+padding:24px;
+font-size:30px;
+font-weight:bold;
+background:#0d1a2b;
+}
 
-    .status-badge {
-      display: inline-block;
-      margin-top: 12px;
-      padding: 8px 14px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: bold;
-    }
+.container{
+padding:18px;
+padding-bottom:100px;
+}
 
-    .status-aguardando {
-      background: #3a3f4a;
-      color: #ffffff;
-    }
+.card{
+background:#121d2d;
+border-radius:18px;
+padding:22px;
+margin-bottom:18px;
+}
 
-    .status-ativo {
-      background: #0f6d50;
-      color: #d6ffef;
-    }
+.signal{
+text-align:center;
+font-size:18px;
+line-height:1.6;
+min-height:170px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+}
 
-    .status-expirado {
-      background: #6b2a2a;
-      color: #ffd7d7;
-    }
+button{
+width:100%;
+padding:18px;
+border:none;
+border-radius:14px;
+background:#10b9d3;
+color:white;
+font-size:17px;
+font-weight:bold;
+cursor:pointer;
+}
 
-    .timer {
-      margin-top: 10px;
-      font-size: 15px;
-      opacity: 0.85;
-    }
+button:disabled{
+background:#3a4d57;
+}
 
-    button {
-      width: 100%;
-      padding: 18px;
-      border: none;
-      border-radius: 14px;
-      background: #10b9d3;
-      color: white;
-      font-size: 17px;
-      font-weight: bold;
-      cursor: pointer;
-    }
+.nav{
+position:fixed;
+bottom:0;
+width:100%;
+background:#0d1a2b;
+display:flex;
+}
 
-    button:disabled {
-      background: #46606b;
-      cursor: not-allowed;
-      opacity: 0.8;
-    }
+.nav button{
+flex:1;
+border-radius:0;
+background:none;
+padding:18px;
+font-size:14px;
+color:white;
+}
 
-    .nav {
-      position: fixed;
-      bottom: 0;
-      width: 100%;
-      background: #0d1a2b;
-      display: flex;
-      border-top: 1px solid rgba(255,255,255,0.06);
-    }
+.hidden{
+display:none;
+}
 
-    .nav button {
-      flex: 1;
-      border-radius: 0;
-      background: none;
-      padding: 18px 10px;
-      font-size: 14px;
-      color: white;
-    }
+.history-item{
+background:#1a2739;
+padding:14px;
+border-radius:12px;
+margin-bottom:12px;
+}
 
-    .hidden {
-      display: none;
-    }
+</style>
 
-    .history-item {
-      background: #1a2739;
-      padding: 14px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    input {
-      width: 100%;
-      padding: 12px;
-      margin-top: 10px;
-      margin-bottom: 14px;
-      border-radius: 10px;
-      border: none;
-      background: #1a2739;
-      color: white;
-      box-sizing: border-box;
-      font-size: 15px;
-    }
-
-    h3 {
-      margin-top: 0;
-      margin-bottom: 18px;
-    }
-
-    .label {
-      font-size: 14px;
-      opacity: 0.85;
-      margin-bottom: 4px;
-      display: block;
-    }
-  </style>
 </head>
 
 <body>
 
-  <header>Soros</header>
+<header>Soros</header>
 
-  <div class="container">
+<div class="container">
 
-    <div id="principal">
-      <div class="card signal">
-        <div class="signal-title">Sinal Atual</div>
-        <div id="signalText">Nenhum sinal ativo</div>
-        <div id="signalStatusWrap"></div>
-        <div id="signalTimer" class="timer"></div>
-      </div>
+<div id="principal">
 
-      <button id="generateButton" onclick="generateSignal()">
-        Gerar Sinal
-      </button>
-    </div>
+<div class="card signal">
 
-    <div id="historico" class="hidden">
-      <div class="card">
-        <h3>Histórico</h3>
-        <div id="historyList">Nenhum sinal ainda</div>
-      </div>
-    </div>
+<div id="signalText">
+Nenhum sinal ativo
+</div>
 
-    <div id="config" class="hidden">
-      <div class="card">
-        <h3>Configurações</h3>
+<div id="timer"></div>
 
-        <label class="label">Valor da entrada</label>
-        <input id="valorEntrada" placeholder="Ex: 10">
+</div>
 
-        <label class="label">Limite diário</label>
-        <input id="limiteDiario" placeholder="Ex: 5 sinais">
+<button id="generateButton" onclick="generateSignal()">
+Gerar Sinal
+</button>
 
-        <button onclick="saveConfig()">Salvar</button>
-      </div>
-    </div>
+</div>
 
-  </div>
+<div id="historico" class="hidden">
 
-  <div class="nav">
-    <button onclick="showTab('principal')">Principal</button>
-    <button onclick="showTab('historico')">Histórico</button>
-    <button onclick="showTab('config')">Config</button>
-  </div>
+<div class="card">
 
-  <script>
-    const ativos = [
-      "EUR/USD",
-      "GBP/USD",
-      "USD/JPY",
-      "BTC/USD",
-      "ETH/USD"
-    ];
+<h3>Histórico</h3>
 
-    const SIGNAL_DURATION_SECONDS = 5;
+<div id="historyList">
+Carregando...
+</div>
 
-    let currentSignal = null;
-    let countdownInterval = null;
+</div>
 
-    function showTab(tab) {
-      document.getElementById("principal").classList.add("hidden");
-      document.getElementById("historico").classList.add("hidden");
-      document.getElementById("config").classList.add("hidden");
+</div>
 
-      document.getElementById(tab).classList.remove("hidden");
-    }
+</div>
 
-    function getStatusBadge(status) {
-      let className = "status-aguardando";
+<div class="nav">
 
-      if (status === "ATIVO") className = "status-ativo";
-      if (status === "EXPIRADO") className = "status-expirado";
+<button onclick="showTab('principal')">Principal</button>
+<button onclick="showTab('historico')">Histórico</button>
 
-      return `<span class="status-badge ${className}">Status: ${status}</span>`;
-    }
+</div>
 
-    function renderCurrentSignal() {
-      const signalText = document.getElementById("signalText");
-      const signalStatusWrap = document.getElementById("signalStatusWrap");
-      const signalTimer = document.getElementById("signalTimer");
+<script>
 
-      if (!currentSignal) {
-        signalText.innerHTML = "Nenhum sinal ativo";
-        signalStatusWrap.innerHTML = getStatusBadge("AGUARDANDO");
-        signalTimer.innerHTML = "";
-        return;
-      }
+const supabase = window.supabase.createClient(
+SOROS_CONFIG.SUPABASE_URL,
+SOROS_CONFIG.SUPABASE_KEY
+)
 
-      signalText.innerHTML = `
-        Ativo: ${currentSignal.ativo}<br>
-        Direção: ${currentSignal.direcao}<br>
-        Força: ${currentSignal.forca}%<br>
-        Hora: ${currentSignal.hora}
-      `;
+let signalActive=false
+let timerInterval=null
+let remaining=SOROS_CONFIG.SIGNAL_DURATION
 
-      signalStatusWrap.innerHTML = getStatusBadge(currentSignal.status);
+function showTab(tab){
 
-      if (currentSignal.status === "ATIVO") {
-        signalTimer.innerHTML = `Expira em: ${currentSignal.remainingSeconds}s`;
-      } else if (currentSignal.status === "EXPIRADO") {
-        signalTimer.innerHTML = "Sinal encerrado";
-      } else {
-        signalTimer.innerHTML = "";
-      }
-    }
+document.getElementById("principal").classList.add("hidden")
+document.getElementById("historico").classList.add("hidden")
 
-    function updateButtonState() {
-      const button = document.getElementById("generateButton");
+document.getElementById(tab).classList.remove("hidden")
 
-      if (currentSignal && currentSignal.status === "ATIVO") {
-        button.disabled = true;
-        button.innerText = "Sinal em andamento...";
-      } else {
-        button.disabled = false;
-        button.innerText = "Gerar Sinal";
-      }
-    }
+}
 
-    function saveHistory(ativo, direcao, forca, hora, statusFinal) {
-      let history = JSON.parse(localStorage.getItem("sorosHistory")) || [];
+async function generateSignal(){
 
-      history.unshift({
-        ativo,
-        direcao,
-        forca,
-        hora,
-        statusFinal
-      });
+if(signalActive) return
 
-      localStorage.setItem("sorosHistory", JSON.stringify(history));
-      renderHistory();
-    }
+signalActive=true
 
-    function renderHistory() {
-      const history = JSON.parse(localStorage.getItem("sorosHistory")) || [];
-      const list = document.getElementById("historyList");
+const ativo=SOROS_CONFIG.ATIVOS[
+Math.floor(Math.random()*SOROS_CONFIG.ATIVOS.length)
+]
 
-      if (history.length === 0) {
-        list.innerHTML = "Nenhum sinal ainda";
-        return;
-      }
+const direcao=Math.random()>0.5?"CALL":"PUT"
 
-      list.innerHTML = "";
+const forca=Math.floor(Math.random()*30)+70
 
-      history.forEach(item => {
-        const div = document.createElement("div");
-        div.className = "history-item";
-        div.innerHTML = `
-          <strong>${item.ativo}</strong><br>
-          Direção: ${item.direcao}<br>
-          Força: ${item.forca}%<br>
-          Hora: ${item.hora}<br>
-          Status final: ${item.statusFinal}
-        `;
-        list.appendChild(div);
-      });
-    }
+const hora=new Date().toLocaleTimeString()
 
-    function expireSignal() {
-      if (!currentSignal) return;
+remaining=SOROS_CONFIG.SIGNAL_DURATION
 
-      currentSignal.status = "EXPIRADO";
-      currentSignal.remainingSeconds = 0;
+document.getElementById("signalText").innerHTML=`
+Ativo: ${ativo}<br>
+Direção: ${direcao}<br>
+Força: ${forca}%<br>
+Hora: ${hora}<br>
+Status: ATIVO
+`
 
-      clearInterval(countdownInterval);
-      countdownInterval = null;
+saveSignal(ativo,direcao,forca,hora)
 
-      renderCurrentSignal();
-      updateButtonState();
+timerInterval=setInterval(()=>{
 
-      saveHistory(
-        currentSignal.ativo,
-        currentSignal.direcao,
-        currentSignal.forca,
-        currentSignal.hora,
-        "EXPIRADO"
-      );
-    }
+remaining--
 
-    function startCountdown() {
-      clearInterval(countdownInterval);
+document.getElementById("timer").innerText=
+`Expira em ${remaining}s`
 
-      countdownInterval = setInterval(() => {
-        if (!currentSignal || currentSignal.status !== "ATIVO") {
-          clearInterval(countdownInterval);
-          countdownInterval = null;
-          return;
-        }
+if(remaining<=0){
 
-        currentSignal.remainingSeconds -= 1;
+clearInterval(timerInterval)
 
-        if (currentSignal.remainingSeconds <= 0) {
-          expireSignal();
-        } else {
-          renderCurrentSignal();
-        }
-      }, 1000);
-    }
+document.getElementById("timer").innerText="Sinal expirado"
 
-    function generateSignal() {
-      if (currentSignal && currentSignal.status === "ATIVO") {
-        return;
-      }
+signalActive=false
 
-      const ativo = ativos[Math.floor(Math.random() * ativos.length)];
-      const direcao = Math.random() > 0.5 ? "CALL" : "PUT";
-      const forca = Math.floor(Math.random() * 30) + 70;
-      const hora = new Date().toLocaleTimeString();
+}
 
-      currentSignal = {
-        ativo,
-        direcao,
-        forca,
-        hora,
-        status: "ATIVO",
-        remainingSeconds: SIGNAL_DURATION_SECONDS
-      };
+},1000)
 
-      renderCurrentSignal();
-      updateButtonState();
-      startCountdown();
-    }
+}
 
-    function saveConfig() {
-      const valor = document.getElementById("valorEntrada").value;
-      const limite = document.getElementById("limiteDiario").value;
+async function saveSignal(asset,direction,strength,time){
 
-      localStorage.setItem("valorEntrada", valor);
-      localStorage.setItem("limiteDiario", limite);
+await supabase
+.from("signals")
+.insert({
+asset,
+direction,
+strength,
+time,
+status:"EXPIRADO"
+})
 
-      alert("Configuração salva");
-    }
+loadHistory()
 
-    function loadConfig() {
-      const valor = localStorage.getItem("valorEntrada");
-      const limite = localStorage.getItem("limiteDiario");
+}
 
-      if (valor) {
-        document.getElementById("valorEntrada").value = valor;
-      }
+async function loadHistory(){
 
-      if (limite) {
-        document.getElementById("limiteDiario").value = limite;
-      }
-    }
+const {data}=await supabase
+.from("signals")
+.select("*")
+.order("created_at",{ascending:false})
+.limit(20)
 
-    renderCurrentSignal();
-    renderHistory();
-    loadConfig();
-    updateButtonState();
-  </script>
+const list=document.getElementById("historyList")
+
+list.innerHTML=""
+
+data.forEach(item=>{
+
+const div=document.createElement("div")
+
+div.className="history-item"
+
+div.innerHTML=`
+${item.asset} |
+${item.direction} |
+${item.strength}% |
+${item.time}
+`
+
+list.appendChild(div)
+
+})
+
+}
+
+loadHistory()
+
+</script>
 
 </body>
 </html>
