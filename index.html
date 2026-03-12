@@ -8,7 +8,6 @@
 <script src="config.js"></script>
 
 <style>
-
 body{
 margin:0;
 font-family:Arial,Helvetica,sans-serif;
@@ -101,7 +100,6 @@ line-height:1.5;
 opacity:.7;
 text-align:center;
 }
-
 </style>
 </head>
 
@@ -112,7 +110,6 @@ text-align:center;
 <div class="container">
 
 <div id="principal">
-
 <div class="card signal">
 <div id="signalText">Nenhum sinal ativo</div>
 <div id="timer" class="status"></div>
@@ -121,16 +118,13 @@ text-align:center;
 <button id="generateButton" onclick="generateSignal()">
 Gerar Sinal
 </button>
-
 </div>
 
 <div id="historico" class="hidden">
-
 <div class="card">
 <h3>Histórico</h3>
 <div id="historyList" class="empty">Carregando...</div>
 </div>
-
 </div>
 
 </div>
@@ -141,89 +135,86 @@ Gerar Sinal
 </div>
 
 <script>
-
 let signalActive=false
 let timerInterval=null
 let remaining=SOROS_CONFIG.SIGNAL_DURATION
 
 function showTab(tab){
-
 document.getElementById("principal").classList.add("hidden")
 document.getElementById("historico").classList.add("hidden")
-
 document.getElementById(tab).classList.remove("hidden")
-
 }
 
-async function getPrice(){
-
+async function getPriceData(){
 const r=await fetch(
-"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true"
 )
 
 const data=await r.json()
 
-return data.bitcoin.usd
-
+return {
+price:data.bitcoin.usd,
+change24h:data.bitcoin.usd_24h_change || 0,
+updatedAt:data.bitcoin.last_updated_at || null
+}
 }
 
 async function analyzeMarket(){
-
-let prices=[]
+let samples=[]
 
 for(let i=0;i<6;i++){
-
-const p=await getPrice()
-
-if(prices.length===0 || p!==prices[prices.length-1]){
-prices.push(p)
-}
-
+const data=await getPriceData()
+samples.push(data)
 await new Promise(r=>setTimeout(r,800))
-
 }
 
 let up=0
 let down=0
 
-for(let i=1;i<prices.length;i++){
-
-if(prices[i]>prices[i-1]) up++
-else if(prices[i]<prices[i-1]) down++
-
+for(let i=1;i<samples.length;i++){
+if(samples[i].price > samples[i-1].price) up++
+else if(samples[i].price < samples[i-1].price) down++
 }
 
 let direction="CALL"
 let trend="ALTA"
-
-if(down>up){
-
-direction="PUT"
-trend="BAIXA"
-
-}
-
-let moves=up+down
-
 let strength=0
+let source="micro"
+
+const moves=up+down
 
 if(moves>0){
-
 strength=Math.round((Math.max(up,down)/moves)*100)
 
+if(down>up){
+direction="PUT"
+trend="BAIXA"
+}
+}else{
+const lastSample=samples[samples.length-1]
+const change24h=lastSample.change24h
+
+direction=change24h >= 0 ? "CALL" : "PUT"
+trend=change24h >= 0 ? "ALTA" : "BAIXA"
+
+strength=Math.round(Math.min(Math.abs(change24h)*10,100))
+source="24h"
+}
+
+if(strength === 0){
+strength = 51
 }
 
 return{
-price:prices[prices.length-1],
+price:samples[samples.length-1].price,
 direction:direction,
 trend:trend,
-strength:strength
+strength:strength,
+source:source
 }
-
 }
 
 async function saveSignal(asset,direction,strength,time,status){
-
 await fetch(
 SOROS_CONFIG.SUPABASE_URL+"/rest/v1/signals",
 {
@@ -243,13 +234,10 @@ status:status
 })
 }
 )
-
 }
 
 async function loadHistory(){
-
 const list=document.getElementById("historyList")
-
 list.innerHTML="Carregando..."
 
 const response=await fetch(
@@ -272,7 +260,6 @@ return
 list.innerHTML=""
 
 data.forEach(item=>{
-
 const div=document.createElement("div")
 div.className="history-item"
 
@@ -285,18 +272,14 @@ Status: ${item.status}
 `
 
 list.appendChild(div)
-
 })
-
 }
 
 async function generateSignal(){
-
 if(signalActive) return
 
 signalActive=true
 document.getElementById("generateButton").disabled=true
-
 document.getElementById("signalText").innerHTML="Analisando mercado..."
 
 const analysis=await analyzeMarket()
@@ -307,49 +290,37 @@ const forca=analysis.strength
 const hora=new Date().toLocaleTimeString()
 
 document.getElementById("signalText").innerHTML=`
-
 Ativo: ${ativo}<br>
 Preço atual: ${analysis.price}<br>
 Tendência: ${analysis.trend}<br>
 Força da tendência: ${analysis.strength}%<br>
 Direção: ${direcao}<br>
+Fonte: ${analysis.source}<br>
 Hora: ${hora}<br>
 Status: ATIVO
-
 `
 
 remaining=SOROS_CONFIG.SIGNAL_DURATION
-
 document.getElementById("timer").innerText=`Expira em ${remaining}s`
 
 saveSignal(ativo,direcao,forca,hora,"ATIVO")
 
 timerInterval=setInterval(()=>{
-
 remaining--
-
 document.getElementById("timer").innerText=`Expira em ${remaining}s`
 
 if(remaining<=0){
-
 clearInterval(timerInterval)
-
 document.getElementById("timer").innerText="Sinal expirado"
-
 signalActive=false
 document.getElementById("generateButton").disabled=false
-
 loadHistory()
-
 }
-
 },1000)
-
 }
 
 loadHistory()
-
 </script>
 
 </body>
-  </html>
+</html>
