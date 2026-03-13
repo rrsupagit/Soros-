@@ -257,29 +257,48 @@
       const momentumUp = a < b && b < c && c < d;
       const momentumDown = a > b && b > c && c > d;
 
+      let momentum = "NEUTRO";
+      if(momentumUp) momentum = "ALTA";
+      if(momentumDown) momentum = "BAIXA";
+
       let direction = null;
       let trend = "NEUTRA";
       let confidence = 0;
-      let momentum = "NEUTRO";
-
-      if(momentumUp) momentum = "ALTA";
-      if(momentumDown) momentum = "BAIXA";
+      let confluence = "SEM SINAL";
 
       const maGapPct = Math.abs(shortMA - longMA) / current * 100;
       const priceGapPct = Math.abs(current - shortMA) / current * 100;
 
-      if(shortMA > longMA && current > shortMA && momentumUp){
+      if(shortMA > longMA && current > shortMA){
         direction = "CALL";
         trend = "ALTA";
-        confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 20);
-      } else if(shortMA < longMA && current < shortMA && momentumDown){
-        direction = "PUT";
-        trend = "BAIXA";
-        confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 20);
+
+        if(momentumUp){
+          confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 22);
+          confluence = "FORTE";
+        } else {
+          confidence = Math.round((maGapPct * 700) + (priceGapPct * 350) + 10);
+          confluence = "MEDIA";
+        }
       }
 
-      if(confidence > 95) confidence = 95;
-      if(direction && confidence < 55) confidence = 55;
+      else if(shortMA < longMA && current < shortMA){
+        direction = "PUT";
+        trend = "BAIXA";
+
+        if(momentumDown){
+          confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 22);
+          confluence = "FORTE";
+        } else {
+          confidence = Math.round((maGapPct * 700) + (priceGapPct * 350) + 10);
+          confluence = "MEDIA";
+        }
+      }
+
+      if(direction){
+        if(confidence < 55) confidence = 55;
+        if(confidence > 95) confidence = 95;
+      }
 
       return {
         valid: !!direction,
@@ -289,7 +308,8 @@
         direction,
         trend,
         confidence,
-        momentum
+        momentum,
+        confluence
       };
     }
 
@@ -403,7 +423,7 @@
 
       if(!analysis.valid){
         document.getElementById("signalText").innerHTML = `
-          Sem confluência agora<br>
+          Sem sinal agora<br>
           Média curta: ${analysis.shortMA.toFixed(2)}<br>
           Média longa: ${analysis.longMA.toFixed(2)}<br>
           Momentum: ${analysis.momentum}
@@ -428,6 +448,7 @@
         Média curta: ${analysis.shortMA.toFixed(2)}<br>
         Média longa: ${analysis.longMA.toFixed(2)}<br>
         Momentum: ${analysis.momentum}<br>
+        Confluência: ${analysis.confluence}<br>
         Tendência: ${analysis.trend}<br>
         Confiança: ${confidence}%<br>
         Direção: ${direction}<br>
