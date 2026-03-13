@@ -39,7 +39,7 @@
       text-align:center;
       font-size:18px;
       line-height:1.6;
-      min-height:220px;
+      min-height:250px;
       display:flex;
       flex-direction:column;
       justify-content:center;
@@ -140,6 +140,7 @@
     .green{ color:#6ee7a8; }
     .red{ color:#ff8f8f; }
     .yellow{ color:#ffd166; }
+    .blue{ color:#7ec8ff; }
   </style>
 </head>
 
@@ -152,7 +153,7 @@
     <div id="principal">
 
       <div class="card signal">
-        <div id="signalText">Aguardando sinal...</div>
+        <div id="signalText">Aguardando análise...</div>
         <div id="timer" class="status"></div>
       </div>
 
@@ -174,9 +175,13 @@
             <div class="stat-label">LOSS</div>
             <div id="statLoss" class="stat-value red">0</div>
           </div>
-          <div class="stat-box" style="grid-column:1 / span 2;">
+          <div class="stat-box">
             <div class="stat-label">DRAW</div>
             <div id="statDraw" class="stat-value yellow">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Score Min</div>
+            <div id="statMinScore" class="stat-value blue">80</div>
           </div>
         </div>
       </div>
@@ -214,6 +219,8 @@
     let operationActive = false;
     let countdownInterval = null;
 
+    document.getElementById("statMinScore").innerText = SOROS_CONFIG.MIN_SCORE_TO_TRADE;
+
     function showTab(tab){
       document.getElementById("principal").classList.add("hidden");
       document.getElementById("historico").classList.add("hidden");
@@ -229,8 +236,15 @@
         `https://api.binance.com/api/v3/klines?symbol=${SOROS_CONFIG.BINANCE_SYMBOL}&interval=1m&limit=20`,
         { cache:"no-store" }
       );
+
       const data = await response.json();
-      return data.map(candle => parseFloat(candle[4]));
+
+      return data.map(candle => ({
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4])
+      }));
     }
 
     async function getCurrentPrice(){
@@ -238,78 +252,110 @@
         `https://api.binance.com/api/v3/ticker/price?symbol=${SOROS_CONFIG.BINANCE_SYMBOL}`,
         { cache:"no-store" }
       );
+
       const data = await response.json();
       return parseFloat(data.price);
     }
 
+    function calcVolatility(closes, current){
+      const maxPrice = Math.max(...closes);
+      const minPrice = Math.min(...closes);
+      return ((maxPrice - minPrice) / current) * 100;
+    }
+
+    function calcMomentum(last4){
+      const closes = last4.map(c => c.close);
+
+      const up =
+        closes[0] < closes[1] &&
+        closes[1] < closes[2] &&
+        closes[2] < closes[3];
+
+      const down =
+        closes[0] > closes[1] &&
+        closes[1] > closes[2] &&
+        closes[2] > closes[3];
+
+      if(up) return "ALTA";
+      if(down) return "BAIXA";
+      return "NEUTRO";
+    }
+
     async function analyzeMarket(){
-      const closes = await getCandles();
+      const candles = await getCandles();
+      const closes = candles.map(c => c.close);
 
       const current = closes[closes.length - 1];
       const shortMA = average(closes.slice(-5));
       const longMA = average(closes.slice(-20));
-
-      const a = closes[closes.length - 4];
-      const b = closes[closes.length - 3];
-      const c = closes[closes.length - 2];
-      const d = closes[closes.length - 1];
-
-      const momentumUp = a < b && b < c && c < d;
-      const momentumDown = a > b && b > c && c > d;
-
-      let momentum = "NEUTRO";
-      if(momentumUp) momentum = "ALTA";
-      if(momentumDown) momentum = "BAIXA";
+      const momentum = calcMomentum(candles.slice(-4));
+      const volatility = calcVolatility(closes.slice(-10), current);
 
       let direction = null;
       let trend = "NEUTRA";
-      let confidence = 0;
-      let confluence = "SEM SINAL";
+      let score = 0;
+      let reasons = [];
+
+      if(shortMA > longMA){
+        score += 25;
+        trend = "ALTA";
+        reasons.push("Média curta acima da longa");
+      }
+
+      if(shortMA < longMA){
+        score += 25;
+        trend = "BAIXA";
+        reasons.push("Média curta abaixo da longa");
+      }
+
+      if(current > shortMA && shortMA > longMA){
+        score += 20;
+        direction = "CALL";
+        reasons.push("Preço acima da média curta");
+      }
+
+      if(current < shortMA && shortMA < longMA){
+        score += 20;
+        direction = "PUT";
+        reasons.push("Preço abaixo da média curta");
+      }
+
+      if(momentum === "ALTA" && direction === "CALL"){
+        score += 20;
+        reasons.push("Momentum alinhado para alta");
+      }
+
+      if(momentum === "BAIXA" && direction === "PUT"){
+        score += 20;
+        reasons.push("Momentum alinhado para baixa");
+      }
 
       const maGapPct = Math.abs(shortMA - longMA) / current * 100;
-      const priceGapPct = Math.abs(current - shortMA) / current * 100;
-
-      if(shortMA > longMA && current > shortMA){
-        direction = "CALL";
-        trend = "ALTA";
-
-        if(momentumUp){
-          confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 22);
-          confluence = "FORTE";
-        } else {
-          confidence = Math.round((maGapPct * 700) + (priceGapPct * 350) + 10);
-          confluence = "MEDIA";
-        }
+      if(maGapPct >= 0.08){
+        score += 15;
+        reasons.push("Boa distância entre médias");
       }
 
-      else if(shortMA < longMA && current < shortMA){
-        direction = "PUT";
-        trend = "BAIXA";
-
-        if(momentumDown){
-          confidence = Math.round((maGapPct * 900) + (priceGapPct * 500) + 22);
-          confluence = "FORTE";
-        } else {
-          confidence = Math.round((maGapPct * 700) + (priceGapPct * 350) + 10);
-          confluence = "MEDIA";
-        }
+      if(volatility >= 0.15){
+        score += 10;
+        reasons.push("Volatilidade suficiente");
       }
 
-      if(direction){
-        if(confidence < 55) confidence = 55;
-        if(confidence > 95) confidence = 95;
-      }
+      if(score > 100) score = 100;
+
+      const valid = !!direction && score >= SOROS_CONFIG.MIN_SCORE_TO_TRADE;
 
       return {
-        valid: !!direction,
+        valid,
         price: current,
         shortMA,
         longMA,
         direction,
         trend,
-        confidence,
+        score,
         momentum,
-        confluence
+        volatility,
+        reasons
       };
     }
 
@@ -361,7 +407,7 @@
           Entrada: ${item.entry_price ?? "-"}<br>
           Saída: ${item.exit_price ?? "-"}<br>
           Resultado: ${item.result || item.status || "-"}<br>
-          Confiança: ${item.confidence ?? item.strength ?? "-"}%<br>
+          Score: ${item.confidence ?? item.strength ?? "-"}<br>
           Hora: ${item.time || "-"}
         `;
         list.appendChild(div);
@@ -370,7 +416,7 @@
 
     async function loadStats(){
       const response = await fetch(
-        SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals?select=result&order=created_at.desc&limit=200",
+        SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals?select=result&order=created_at.desc&limit=300",
         {
           headers:{
             "apikey":SOROS_CONFIG.SUPABASE_KEY,
@@ -416,6 +462,7 @@
 
       operationActive = true;
       setBusyButtons();
+
       document.getElementById("signalText").innerHTML = "Analisando mercado...";
       document.getElementById("timer").innerText = "";
 
@@ -423,11 +470,18 @@
 
       if(!analysis.valid){
         document.getElementById("signalText").innerHTML = `
-          Sem sinal agora<br>
+          Sem entrada<br>
+          Score: ${analysis.score}<br>
+          Score mínimo: ${SOROS_CONFIG.MIN_SCORE_TO_TRADE}<br>
+          Tendência: ${analysis.trend}<br>
+          Momentum: ${analysis.momentum}<br>
+          Volatilidade: ${analysis.volatility.toFixed(3)}%<br>
           Média curta: ${analysis.shortMA.toFixed(2)}<br>
-          Média longa: ${analysis.longMA.toFixed(2)}<br>
-          Momentum: ${analysis.momentum}
+          Média longa: ${analysis.longMA.toFixed(2)}
         `;
+
+        document.getElementById("timer").innerText = "Aguardando novo cenário";
+
         operationActive = false;
         setIdleButtons();
 
@@ -439,7 +493,7 @@
 
       const entryPrice = await getCurrentPrice();
       const direction = analysis.direction;
-      const confidence = analysis.confidence;
+      const score = analysis.score;
       const startedAt = new Date().toLocaleTimeString();
 
       document.getElementById("signalText").innerHTML = `
@@ -448,16 +502,14 @@
         Média curta: ${analysis.shortMA.toFixed(2)}<br>
         Média longa: ${analysis.longMA.toFixed(2)}<br>
         Momentum: ${analysis.momentum}<br>
-        Confluência: ${analysis.confluence}<br>
-        Tendência: ${analysis.trend}<br>
-        Confiança: ${confidence}%<br>
+        Volatilidade: ${analysis.volatility.toFixed(3)}%<br>
+        Score: ${score}<br>
         Direção: ${direction}<br>
         Entrada: ${entryPrice.toFixed(2)}<br>
         Status: ATIVO
       `;
 
       let remaining = SOROS_CONFIG.SIGNAL_DURATION;
-
       document.getElementById("timer").innerText = `Resultado em ${remaining}s`;
 
       countdownInterval = setInterval(async () => {
@@ -481,7 +533,7 @@
             Entrada: ${entryPrice.toFixed(2)}<br>
             Saída: ${exitPrice.toFixed(2)}<br>
             Resultado: ${result}<br>
-            Confiança: ${confidence}%<br>
+            Score: ${score}<br>
             Status: FINALIZADO
           `;
 
@@ -490,8 +542,8 @@
           await saveTrade({
             asset: SOROS_CONFIG.ASSET_LABEL,
             direction: direction,
-            strength: confidence,
-            confidence: confidence,
+            strength: score,
+            confidence: score,
             time: startedAt,
             status: result,
             result: result,
@@ -529,9 +581,11 @@
     function stopAuto(){
       autoMode = false;
       clearInterval(countdownInterval);
+
       if(!operationActive){
         setIdleButtons();
       }
+
       document.getElementById("timer").innerText = "Auto parado";
     }
 
