@@ -181,7 +181,7 @@
           </div>
           <div class="stat-box">
             <div class="stat-label">Score Min</div>
-            <div id="statMinScore" class="stat-value blue">80</div>
+            <div id="statMinScore" class="stat-value blue">0</div>
           </div>
         </div>
       </div>
@@ -211,7 +211,7 @@
 
   <div class="nav">
     <button onclick="showTab('principal')">Principal</button>
-    <button onclick="showTab('historico');loadHistory();loadStats();">Histórico</button>
+    <button onclick="showTab('historico');loadHistory();">Histórico</button>
   </div>
 
   <script>
@@ -219,7 +219,16 @@
     let operationActive = false;
     let countdownInterval = null;
 
-    document.getElementById("statMinScore").innerText = SOROS_CONFIG.MIN_SCORE_TO_TRADE;
+    let sessionStats = {
+      total: 0,
+      win: 0,
+      loss: 0,
+      draw: 0
+    };
+
+    const MIN_SCORE = Number(SOROS_CONFIG.MIN_SCORE_TO_TRADE || 80);
+
+    document.getElementById("statMinScore").innerText = MIN_SCORE;
 
     function showTab(tab){
       document.getElementById("principal").classList.add("hidden");
@@ -229,6 +238,38 @@
 
     function average(arr){
       return arr.reduce((a,b)=>a+b,0)/arr.length;
+    }
+
+    function resetSessionStats(){
+      sessionStats = {
+        total: 0,
+        win: 0,
+        loss: 0,
+        draw: 0
+      };
+      renderSessionStats();
+    }
+
+    function renderSessionStats(){
+      const total = sessionStats.total;
+      const winRate = total > 0 ? Math.round((sessionStats.win / total) * 100) : 0;
+
+      document.getElementById("statTotal").innerText = total;
+      document.getElementById("statWin").innerText = sessionStats.win;
+      document.getElementById("statLoss").innerText = sessionStats.loss;
+      document.getElementById("statDraw").innerText = sessionStats.draw;
+      document.getElementById("statWinRate").innerText = winRate + "%";
+      document.getElementById("statMinScore").innerText = MIN_SCORE;
+    }
+
+    function updateSessionResult(result){
+      sessionStats.total++;
+
+      if(result === "WIN") sessionStats.win++;
+      else if(result === "LOSS") sessionStats.loss++;
+      else if(result === "DRAW") sessionStats.draw++;
+
+      renderSessionStats();
     }
 
     async function getCandles(){
@@ -294,56 +335,47 @@
       let direction = null;
       let trend = "NEUTRA";
       let score = 0;
-      let reasons = [];
 
       if(shortMA > longMA){
         score += 25;
         trend = "ALTA";
-        reasons.push("Média curta acima da longa");
       }
 
       if(shortMA < longMA){
         score += 25;
         trend = "BAIXA";
-        reasons.push("Média curta abaixo da longa");
       }
 
       if(current > shortMA && shortMA > longMA){
         score += 20;
         direction = "CALL";
-        reasons.push("Preço acima da média curta");
       }
 
       if(current < shortMA && shortMA < longMA){
         score += 20;
         direction = "PUT";
-        reasons.push("Preço abaixo da média curta");
       }
 
       if(momentum === "ALTA" && direction === "CALL"){
         score += 20;
-        reasons.push("Momentum alinhado para alta");
       }
 
       if(momentum === "BAIXA" && direction === "PUT"){
         score += 20;
-        reasons.push("Momentum alinhado para baixa");
       }
 
       const maGapPct = Math.abs(shortMA - longMA) / current * 100;
       if(maGapPct >= 0.08){
         score += 15;
-        reasons.push("Boa distância entre médias");
       }
 
       if(volatility >= 0.15){
         score += 10;
-        reasons.push("Volatilidade suficiente");
       }
 
       if(score > 100) score = 100;
 
-      const valid = !!direction && score >= SOROS_CONFIG.MIN_SCORE_TO_TRADE;
+      const valid = !!direction && score >= MIN_SCORE;
 
       return {
         valid,
@@ -354,8 +386,7 @@
         trend,
         score,
         momentum,
-        volatility,
-        reasons
+        volatility
       };
     }
 
@@ -375,15 +406,72 @@
       );
     }
 
+    async function cleanupOldTradesIfNeeded(){
+      try{
+        const countResponse = await fetch(
+          `${SOROS_CONFIG.SUPABASE_URL}/rest/v1/signals?select=id&limit=1`,
+          {
+            headers:{
+              "apikey": SOROS_CONFIG.SUPABASE_KEY,
+              "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY,
+              "Prefer":"count=exact"
+            }
+          }
+        );
+
+        const contentRange = countResponse.headers.get("content-range");
+        let totalRows = 0;
+
+        if(contentRange && contentRange.includes("/")){
+          totalRows = parseInt(contentRange.split("/")[1], 10) || 0;
+        }
+
+        if(totalRows < SOROS_CONFIG.MAX_DB_ROWS){
+          return;
+        }
+
+        const oldestResponse = await fetch(
+          `${SOROS_CONFIG.SUPABASE_URL}/rest/v1/signals?select=id&order=id.asc&limit=${SOROS_CONFIG.DELETE_OLD_ROWS}`,
+          {
+            headers:{
+              "apikey": SOROS_CONFIG.SUPABASE_KEY,
+              "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY
+            }
+          }
+        );
+
+        const oldestData = await oldestResponse.json();
+
+        if(!oldestData || oldestData.length === 0){
+          return;
+        }
+
+        const thresholdId = oldestData[oldestData.length - 1].id;
+
+        await fetch(
+          `${SOROS_CONFIG.SUPABASE_URL}/rest/v1/signals?id=lte.${thresholdId}`,
+          {
+            method:"DELETE",
+            headers:{
+              "apikey": SOROS_CONFIG.SUPABASE_KEY,
+              "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY
+            }
+          }
+        );
+      } catch(error){
+        console.log("Erro ao limpar histórico antigo:", error);
+      }
+    }
+
     async function loadHistory(){
       const list = document.getElementById("historyList");
       list.innerHTML = "Carregando...";
 
       const response = await fetch(
-        SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals?select=*&order=created_at.desc&limit=30",
+        `${SOROS_CONFIG.SUPABASE_URL}/rest/v1/signals?select=*&order=created_at.desc&limit=${SOROS_CONFIG.HISTORY_LIMIT}`,
         {
           headers:{
-            "apikey":SOROS_CONFIG.SUPABASE_KEY,
+            "apikey": SOROS_CONFIG.SUPABASE_KEY,
             "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY
           }
         }
@@ -414,39 +502,6 @@
       });
     }
 
-    async function loadStats(){
-      const response = await fetch(
-        SOROS_CONFIG.SUPABASE_URL + "/rest/v1/signals?select=result&order=created_at.desc&limit=300",
-        {
-          headers:{
-            "apikey":SOROS_CONFIG.SUPABASE_KEY,
-            "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      let win = 0;
-      let loss = 0;
-      let draw = 0;
-
-      data.forEach(item => {
-        if(item.result === "WIN") win++;
-        else if(item.result === "LOSS") loss++;
-        else if(item.result === "DRAW") draw++;
-      });
-
-      const total = win + loss + draw;
-      const winRate = total > 0 ? Math.round((win / total) * 100) : 0;
-
-      document.getElementById("statTotal").innerText = total;
-      document.getElementById("statWin").innerText = win;
-      document.getElementById("statLoss").innerText = loss;
-      document.getElementById("statDraw").innerText = draw;
-      document.getElementById("statWinRate").innerText = winRate + "%";
-    }
-
     function setIdleButtons(){
       document.getElementById("singleButton").disabled = false;
       document.getElementById("startButton").disabled = false;
@@ -472,7 +527,7 @@
         document.getElementById("signalText").innerHTML = `
           Sem entrada<br>
           Score: ${analysis.score}<br>
-          Score mínimo: ${SOROS_CONFIG.MIN_SCORE_TO_TRADE}<br>
+          Score mínimo: ${MIN_SCORE}<br>
           Tendência: ${analysis.trend}<br>
           Momentum: ${analysis.momentum}<br>
           Volatilidade: ${analysis.volatility.toFixed(3)}%<br>
@@ -555,8 +610,10 @@
             momentum: analysis.momentum
           });
 
+          await cleanupOldTradesIfNeeded();
           await loadHistory();
-          await loadStats();
+
+          updateSessionResult(result);
 
           operationActive = false;
           setIdleButtons();
@@ -575,6 +632,7 @@
 
     function startAuto(){
       autoMode = true;
+      resetSessionStats();
       executeCycle();
     }
 
@@ -589,8 +647,8 @@
       document.getElementById("timer").innerText = "Auto parado";
     }
 
+    renderSessionStats();
     loadHistory();
-    loadStats();
   </script>
 
 </body>
