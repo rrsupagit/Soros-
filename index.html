@@ -39,7 +39,7 @@
       text-align:center;
       font-size:18px;
       line-height:1.6;
-      min-height:250px;
+      min-height:280px;
       display:flex;
       flex-direction:column;
       justify-content:center;
@@ -281,10 +281,12 @@
       const data = await response.json();
 
       return data.map(candle => ({
+        openTime: candle[0],
         open: parseFloat(candle[1]),
         high: parseFloat(candle[2]),
         low: parseFloat(candle[3]),
-        close: parseFloat(candle[4])
+        close: parseFloat(candle[4]),
+        closeTime: candle[6]
       }));
     }
 
@@ -386,8 +388,51 @@
         trend,
         score,
         momentum,
-        volatility
+        volatility,
+        lastClosedCandleCloseTime: candles[candles.length - 1].closeTime
       };
+    }
+
+    function getNextMinuteTimestamp(){
+      const now = new Date();
+      now.setSeconds(0, 0);
+      return now.getTime() + 60000;
+    }
+
+    async function waitUntilNextMinute(){
+      const target = getNextMinuteTimestamp();
+
+      return new Promise(resolve => {
+        const interval = setInterval(() => {
+          const remainingMs = target - Date.now();
+          const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+          document.getElementById("timer").innerText = `Entrada no próximo minuto: ${seconds}s`;
+
+          if(remainingMs <= 0){
+            clearInterval(interval);
+            resolve();
+          }
+        }, 250);
+      });
+    }
+
+    async function waitOneFullMinuteFromNow(){
+      const target = Date.now() + 60000;
+
+      return new Promise(resolve => {
+        countdownInterval = setInterval(() => {
+          const remainingMs = target - Date.now();
+          const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+          document.getElementById("timer").innerText = `Fechamento em ${seconds}s`;
+
+          if(remainingMs <= 0){
+            clearInterval(countdownInterval);
+            resolve();
+          }
+        }, 250);
+      });
     }
 
     async function saveTrade(trade){
@@ -397,7 +442,7 @@
           method:"POST",
           headers:{
             "Content-Type":"application/json",
-            "apikey":SOROS_CONFIG.SUPABASE_KEY,
+            "apikey": SOROS_CONFIG.SUPABASE_KEY,
             "Authorization":"Bearer " + SOROS_CONFIG.SUPABASE_KEY,
             "Prefer":"return=minimal"
           },
@@ -518,7 +563,7 @@
       operationActive = true;
       setBusyButtons();
 
-      document.getElementById("signalText").innerHTML = "Analisando mercado...";
+      document.getElementById("signalText").innerHTML = "Analisando candle de 1 minuto...";
       document.getElementById("timer").innerText = "";
 
       const analysis = await analyzeMarket();
@@ -546,11 +591,6 @@
         return;
       }
 
-      const entryPrice = await getCurrentPrice();
-      const direction = analysis.direction;
-      const score = analysis.score;
-      const startedAt = new Date().toLocaleTimeString();
-
       document.getElementById("signalText").innerHTML = `
         Ativo: ${SOROS_CONFIG.ASSET_LABEL}<br>
         Preço atual: ${analysis.price.toFixed(2)}<br>
@@ -558,71 +598,75 @@
         Média longa: ${analysis.longMA.toFixed(2)}<br>
         Momentum: ${analysis.momentum}<br>
         Volatilidade: ${analysis.volatility.toFixed(3)}%<br>
-        Score: ${score}<br>
-        Direção: ${direction}<br>
-        Entrada: ${entryPrice.toFixed(2)}<br>
-        Status: ATIVO
+        Score: ${analysis.score}<br>
+        Direção: ${analysis.direction}<br>
+        Status: AGUARDANDO VIRAR O MINUTO
       `;
 
-      let remaining = SOROS_CONFIG.SIGNAL_DURATION;
-      document.getElementById("timer").innerText = `Resultado em ${remaining}s`;
+      await waitUntilNextMinute();
 
-      countdownInterval = setInterval(async () => {
-        remaining--;
-        document.getElementById("timer").innerText = `Resultado em ${remaining}s`;
+      const entryPrice = await getCurrentPrice();
+      const direction = analysis.direction;
+      const score = analysis.score;
+      const startedAt = new Date().toLocaleTimeString();
 
-        if(remaining <= 0){
-          clearInterval(countdownInterval);
+      document.getElementById("signalText").innerHTML = `
+        Ativo: ${SOROS_CONFIG.ASSET_LABEL}<br>
+        Direção: ${direction}<br>
+        Score: ${score}<br>
+        Entrada: ${entryPrice.toFixed(2)}<br>
+        Status: OPERANDO 1 MINUTO
+      `;
 
-          const exitPrice = await getCurrentPrice();
+      await waitOneFullMinuteFromNow();
 
-          let result = "LOSS";
+      const exitPrice = await getCurrentPrice();
 
-          if(direction === "CALL" && exitPrice > entryPrice) result = "WIN";
-          else if(direction === "PUT" && exitPrice < entryPrice) result = "WIN";
-          else if(exitPrice === entryPrice) result = "DRAW";
+      let result = "LOSS";
 
-          document.getElementById("signalText").innerHTML = `
-            Ativo: ${SOROS_CONFIG.ASSET_LABEL}<br>
-            Direção: ${direction}<br>
-            Entrada: ${entryPrice.toFixed(2)}<br>
-            Saída: ${exitPrice.toFixed(2)}<br>
-            Resultado: ${result}<br>
-            Score: ${score}<br>
-            Status: FINALIZADO
-          `;
+      if(direction === "CALL" && exitPrice > entryPrice) result = "WIN";
+      else if(direction === "PUT" && exitPrice < entryPrice) result = "WIN";
+      else if(exitPrice === entryPrice) result = "DRAW";
 
-          document.getElementById("timer").innerText = "Operação encerrada";
+      document.getElementById("signalText").innerHTML = `
+        Ativo: ${SOROS_CONFIG.ASSET_LABEL}<br>
+        Direção: ${direction}<br>
+        Entrada: ${entryPrice.toFixed(2)}<br>
+        Saída: ${exitPrice.toFixed(2)}<br>
+        Resultado: ${result}<br>
+        Score: ${score}<br>
+        Status: FINALIZADO
+      `;
 
-          await saveTrade({
-            asset: SOROS_CONFIG.ASSET_LABEL,
-            direction: direction,
-            strength: score,
-            confidence: score,
-            time: startedAt,
-            status: result,
-            result: result,
-            entry_price: entryPrice,
-            exit_price: exitPrice,
-            operation_seconds: SOROS_CONFIG.SIGNAL_DURATION,
-            short_ma: analysis.shortMA,
-            long_ma: analysis.longMA,
-            momentum: analysis.momentum
-          });
+      document.getElementById("timer").innerText = "Operação encerrada";
 
-          await cleanupOldTradesIfNeeded();
-          await loadHistory();
+      await saveTrade({
+        asset: SOROS_CONFIG.ASSET_LABEL,
+        direction: direction,
+        strength: score,
+        confidence: score,
+        time: startedAt,
+        status: result,
+        result: result,
+        entry_price: entryPrice,
+        exit_price: exitPrice,
+        operation_seconds: 60,
+        short_ma: analysis.shortMA,
+        long_ma: analysis.longMA,
+        momentum: analysis.momentum
+      });
 
-          updateSessionResult(result);
+      await cleanupOldTradesIfNeeded();
+      await loadHistory();
 
-          operationActive = false;
-          setIdleButtons();
+      updateSessionResult(result);
 
-          if(autoMode){
-            setTimeout(executeCycle, SOROS_CONFIG.AUTO_RETRY_SECONDS * 1000);
-          }
-        }
-      }, 1000);
+      operationActive = false;
+      setIdleButtons();
+
+      if(autoMode){
+        setTimeout(executeCycle, SOROS_CONFIG.AUTO_RETRY_SECONDS * 1000);
+      }
     }
 
     function runSingle(){
